@@ -1,0 +1,218 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- CONFIG
+local REMOTE_EVENT_NAME = "CoinUpdateEvent"
+local BASE_FARM_RATE = 0.5
+
+-- RemoteEvent
+local remoteEvent = ReplicatedStorage:FindFirstChild(REMOTE_EVENT_NAME)
+if not remoteEvent then
+	remoteEvent = Instance.new("RemoteEvent")
+	remoteEvent.Name = REMOTE_EVENT_NAME
+	remoteEvent.Parent = ReplicatedStorage
+end
+
+--========================
+-- 🔷 Rune Class
+--========================
+local Rune = {}
+Rune.__index = Rune
+
+function Rune.new(name, config)
+	local self = setmetatable({}, Rune)
+	self.name = name
+	self.currency = config.currency
+	self.baseCost = config.baseCost
+	self.costMultiplier = config.costMultiplier
+	self.earningsMultiplier = config.earningsMultiplier
+	self.count = 0
+	return self
+end
+
+function Rune:GetCost()
+	return math.floor(self.baseCost * (self.costMultiplier ^ self.count))
+end
+
+function Rune:GetMultiplier()
+	return self.earningsMultiplier ^ self.count
+end
+
+function Rune:Buy(playerData)
+	local cost = self:GetCost()
+
+	if playerData[self.currency] >= cost then
+		playerData[self.currency] -= cost
+		self.count += 1
+		return true
+	end
+
+	return false
+end
+
+--========================
+-- 🔷 PlayerData Class
+--========================
+local PlayerDataClass = {}
+PlayerDataClass.__index = PlayerDataClass
+
+function PlayerDataClass.new(player)
+	local self = setmetatable({}, PlayerDataClass)
+
+	self.player = player
+
+	self.CAU_COINS = 0
+	self.ADD_POINTS = 0
+	self.GPA_SCORE = 0
+
+	self.runes = {
+		CAU_RUNE = Rune.new("CAU_RUNE", {
+			currency = "CAU_COINS",
+			baseCost = 10,
+			costMultiplier = 1.5,
+			earningsMultiplier = 2
+		}),
+		ADD_RUNE = Rune.new("ADD_RUNE", {
+			currency = "CAU_COINS",
+			baseCost = 100,
+			costMultiplier = 1.5,
+			earningsMultiplier = 2
+		}),
+		GPA_RUNE = Rune.new("GPA_RUNE", {
+			currency = "ADD_POINTS",
+			baseCost = 100,
+			costMultiplier = 1.5,
+			earningsMultiplier = 2
+		})
+	}
+
+	self.loopId = nil
+
+	return self
+end
+
+function PlayerDataClass:CreateLeaderstats()
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = self.player
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "CAUCoins"
+	coins.Parent = leaderstats
+
+	local add = Instance.new("IntValue")
+	add.Name = "ADDPoints"
+	add.Parent = leaderstats
+
+	local gpa = Instance.new("IntValue")
+	gpa.Name = "GPAScore"
+	gpa.Parent = leaderstats
+
+	self:UpdateLeaderstats()
+end
+
+function PlayerDataClass:UpdateLeaderstats()
+	local ls = self.player:FindFirstChild("leaderstats")
+	if not ls then return end
+
+	ls.CAUCoins.Value = self.CAU_COINS
+	ls.ADDPoints.Value = self.ADD_POINTS
+	ls.GPAScore.Value = self.GPA_SCORE
+end
+
+function PlayerDataClass:SendData()
+	remoteEvent:FireClient(self.player, {
+		coins = self.CAU_COINS,
+		add = self.ADD_POINTS,
+		gpa = self.GPA_SCORE,
+
+		cauRunes = self.runes.CAU_RUNE.count,
+		addRunes = self.runes.ADD_RUNE.count,
+		gpaRunes = self.runes.GPA_RUNE.count,
+
+		cauCost = self.runes.CAU_RUNE:GetCost(),
+		addCost = self.runes.ADD_RUNE:GetCost(),
+		gpaCost = self.runes.GPA_RUNE:GetCost()
+	})
+end
+
+function PlayerDataClass:FarmTick()
+	local cauMultiplier = self.runes.CAU_RUNE:GetMultiplier()
+	self.CAU_COINS += cauMultiplier
+
+	if self.runes.ADD_RUNE.count > 0 then
+		self.ADD_POINTS += self.runes.ADD_RUNE:GetMultiplier()
+	end
+
+	if self.runes.GPA_RUNE.count > 0 then
+		self.GPA_SCORE += self.runes.GPA_RUNE:GetMultiplier()
+	end
+end
+
+function PlayerDataClass:StartLoop()
+	local loopId = {}
+	self.loopId = loopId
+
+	task.spawn(function()
+		while self.loopId == loopId do
+			self:FarmTick()
+			self:UpdateLeaderstats()
+			self:SendData()
+			task.wait(BASE_FARM_RATE)
+		end
+	end)
+end
+
+function PlayerDataClass:StopLoop()
+	self.loopId = nil
+end
+
+function PlayerDataClass:BuyRune(runeName)
+	local rune = self.runes[runeName]
+	if not rune then return end
+
+	if rune:Buy(self) then
+		self:SendData()
+	end
+end
+
+--========================
+-- 🔷 Game Manager
+--========================
+local PlayerObjects = {}
+
+local function onPlayerAdded(player)
+	local obj = PlayerDataClass.new(player)
+	PlayerObjects[player.UserId] = obj
+
+	obj:CreateLeaderstats()
+
+	task.wait(0.5)
+	obj:SendData()
+	obj:StartLoop()
+end
+
+local function onPlayerRemoving(player)
+	local obj = PlayerObjects[player.UserId]
+	if obj then
+		obj:StopLoop()
+	end
+	PlayerObjects[player.UserId] = nil
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+remoteEvent.OnServerEvent:Connect(function(player, action, runeName)
+	local obj = PlayerObjects[player.UserId]
+	if not obj then return end
+
+	if action == "BuyRune" then
+		obj:BuyRune(runeName)
+	end
+end)
+
+-- For already connected players
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
