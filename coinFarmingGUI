@@ -1,0 +1,201 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local remoteEvent = ReplicatedStorage:WaitForChild("CoinUpdateEvent")
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FarmGUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 320, 0, 390)
+frame.Position = UDim2.new(0.5, -160, 0.5, -195)
+frame.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+frame.BorderSizePixel = 0
+frame.Visible = false
+frame.Parent = gui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 16)
+frameCorner.Parent = frame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Thickness = 1
+frameStroke.Color = Color3.fromRGB(90, 90, 110)
+frameStroke.Transparency = 0.35
+frameStroke.Parent = frame
+
+local frameGradient = Instance.new("UIGradient")
+frameGradient.Rotation = 90
+frameGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 55)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 28))
+}
+frameGradient.Parent = frame
+
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0, 12)
+padding.PaddingLeft = UDim.new(0, 12)
+padding.PaddingRight = UDim.new(0, 12)
+padding.PaddingBottom = UDim.new(0, 12)
+padding.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 34)
+title.BackgroundTransparency = 1
+title.Text = "Farm Panel"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 22
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = frame
+
+local function makeLabel(yOffset, text)
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, 0, 0, 26)
+	lbl.Position = UDim2.new(0, 0, 0, yOffset)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.fromRGB(235, 235, 245)
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.TextSize = 18
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Text = text
+	lbl.Parent = frame
+	return lbl
+end
+
+local function makeButton(text, yOffset)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 40)
+	btn.Position = UDim2.new(0, 0, 0, yOffset)
+	btn.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 16
+	btn.Text = text
+	btn.AutoButtonColor = false
+	btn.Parent = frame
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 12)
+	c.Parent = btn
+
+	local s = Instance.new("UIStroke")
+	s.Thickness = 1
+	s.Color = Color3.fromRGB(120, 120, 145)
+	s.Transparency = 0.45
+	s.Parent = btn
+
+	btn.MouseEnter:Connect(function()
+		TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 90)}):Play()
+	end)
+
+	btn.MouseLeave:Connect(function()
+		TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 70)}):Play()
+	end)
+
+	return btn
+end
+
+local cauLabel = makeLabel(50, "CAU Coins: 0")
+local addLabel = makeLabel(80, "ADD Points: 0")
+local gpaLabel = makeLabel(110, "GPA Score: 0")
+local cauRuneLabel = makeLabel(150, "CAU Runes: 0 (x1)")
+local addRuneLabel = makeLabel(180, "ADD Runes: 0 (x1)")
+local gpaRuneLabel = makeLabel(210, "GPA Runes: 0 (x1)")
+
+local cauBtn = makeButton("Buy CAU Rune (10)", 255)
+local addBtn = makeButton("Buy ADD Rune (100)", 300)
+local gpaBtn = makeButton("Buy GPA Rune (100 ADD)", 345)
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 48, 0, 120)
+toggleBtn.AnchorPoint = Vector2.new(1, 0.5)
+toggleBtn.Position = UDim2.new(1, -8, 0.5, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Text = "Open"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 16
+toggleBtn.AutoButtonColor = false
+toggleBtn.Parent = gui
+
+local tCorner = Instance.new("UICorner")
+tCorner.CornerRadius = UDim.new(0, 14)
+tCorner.Parent = toggleBtn
+
+local tStroke = Instance.new("UIStroke")
+tStroke.Thickness = 1
+tStroke.Color = Color3.fromRGB(120, 120, 145)
+tStroke.Transparency = 0.4
+tStroke.Parent = toggleBtn
+
+local function openUI()
+	frame.Visible = true
+	frame.Position = UDim2.new(0.5, -160, 0.5, 20)
+	TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, -160, 0.5, -195)
+	}):Play()
+	toggleBtn.Text = "Close"
+end
+
+local function closeUI()
+	local tween = TweenService:Create(frame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Position = UDim2.new(0.5, -160, 0.5, 20)
+	})
+	tween:Play()
+	tween.Completed:Connect(function()
+		frame.Visible = false
+	end)
+	toggleBtn.Text = "Open"
+end
+
+toggleBtn.MouseButton1Click:Connect(function()
+	if frame.Visible then
+		closeUI()
+	else
+		openUI()
+	end
+end)
+
+cauBtn.MouseButton1Click:Connect(function()
+	remoteEvent:FireServer("BuyRune", "CAU_RUNE")
+end)
+
+addBtn.MouseButton1Click:Connect(function()
+	remoteEvent:FireServer("BuyRune", "ADD_RUNE")
+end)
+
+gpaBtn.MouseButton1Click:Connect(function()
+	remoteEvent:FireServer("BuyRune", "GPA_RUNE")
+end)
+
+local function updateUI(data)
+	cauLabel.Text = "CAU Coins: " .. tostring(math.floor(data.coins or 0))
+	addLabel.Text = "ADD Points: " .. tostring(math.floor(data.add or 0))
+	gpaLabel.Text = "GPA Score: " .. tostring(math.floor(data.gpa or 0))
+
+	local cauMult = 2^(data.cauRunes or 0)
+	local addMult = 2^(data.addRunes or 0)
+	local gpaMult = 2^(data.gpaRunes or 0)
+
+	cauRuneLabel.Text = string.format("CAU Runes: %d (+%d)", data.cauRunes or 0, cauMult)
+	addRuneLabel.Text = string.format("ADD Runes: %d (+%d)", data.addRunes or 0, addMult)
+	gpaRuneLabel.Text = string.format("GPA Runes: %d (+%d)", data.gpaRunes or 0, gpaMult)
+
+	cauBtn.Text = string.format("Buy CAU Rune (%d)", data.cauCost or 10)
+	addBtn.Text = string.format("Buy ADD Rune (%d)", data.addCost or 100)
+	gpaBtn.Text = string.format("Buy GPA Rune (%d ADD)", data.gpaCost or 100)
+end
+
+remoteEvent.OnClientEvent:Connect(updateUI)
+
+updateUI({
+	coins = 0, add = 0, gpa = 0,
+	cauRunes = 0, addRunes = 0, gpaRunes = 0,
+	cauCost = 10, addCost = 100, gpaCost = 100
+})
