@@ -5,38 +5,39 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local remoteEvent = ReplicatedStorage:WaitForChild("CoinUpdateEvent")
 
+-- GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "FarmGUI"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
 
+-- MAIN FRAME
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 320, 0, 390)
-frame.Position = UDim2.new(0.5, -160, 0.5, -195)
+frame.Size = UDim2.new(0, 320, 0, 420)
+frame.Position = UDim2.new(0.5, -160, 0.5, -210)
 frame.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
 frame.BorderSizePixel = 0
 frame.Visible = false
 frame.Parent = gui
 
-local frameCorner = Instance.new("UICorner")
-frameCorner.CornerRadius = UDim.new(0, 16)
-frameCorner.Parent = frame
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
 
-local frameStroke = Instance.new("UIStroke")
-frameStroke.Thickness = 1
-frameStroke.Color = Color3.fromRGB(90, 90, 110)
-frameStroke.Transparency = 0.35
-frameStroke.Parent = frame
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(90, 90, 110)
+stroke.Transparency = 0.35
+stroke.Parent = frame
 
-local frameGradient = Instance.new("UIGradient")
-frameGradient.Rotation = 90
-frameGradient.Color = ColorSequence.new{
+local gradient = Instance.new("UIGradient")
+gradient.Rotation = 90
+gradient.Color = ColorSequence.new{
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 55)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 28))
 }
-frameGradient.Parent = frame
+gradient.Parent = frame
 
+-- PADDING
 local padding = Instance.new("UIPadding")
 padding.PaddingTop = UDim.new(0, 12)
 padding.PaddingLeft = UDim.new(0, 12)
@@ -44,45 +45,40 @@ padding.PaddingRight = UDim.new(0, 12)
 padding.PaddingBottom = UDim.new(0, 12)
 padding.Parent = frame
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 34)
-title.BackgroundTransparency = 1
-title.Text = "Farm Panel"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 22
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = frame
+-- AUTO LAYOUT
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = frame
 
-local function makeLabel(yOffset, text)
+-- FUNCTIONS
+local function makeLabel(text, order)
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, 0, 0, 26)
-	lbl.Position = UDim2.new(0, 0, 0, yOffset)
+	lbl.Size = UDim2.new(1, 0, 0, 24)
 	lbl.BackgroundTransparency = 1
 	lbl.TextColor3 = Color3.fromRGB(235, 235, 245)
 	lbl.Font = Enum.Font.GothamMedium
-	lbl.TextSize = 18
+	lbl.TextSize = 16
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.Text = text
+	lbl.LayoutOrder = order
 	lbl.Parent = frame
 	return lbl
 end
 
-local function makeButton(text, yOffset)
+local function makeButton(text, order)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0, 40)
-	btn.Position = UDim2.new(0, 0, 0, yOffset)
+	btn.Size = UDim2.new(1, 0, 0, 38)
 	btn.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 16
+	btn.TextSize = 15
 	btn.Text = text
 	btn.AutoButtonColor = false
+	btn.LayoutOrder = order
 	btn.Parent = frame
 
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 12)
-	c.Parent = btn
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
 
 	local s = Instance.new("UIStroke")
 	s.Thickness = 1
@@ -91,27 +87,50 @@ local function makeButton(text, yOffset)
 	s.Parent = btn
 
 	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 90)}):Play()
+		TweenService:Create(btn, TweenInfo.new(0.15), {
+			BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+		}):Play()
 	end)
 
 	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 70)}):Play()
+		TweenService:Create(btn, TweenInfo.new(0.15), {
+			BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+		}):Play()
 	end)
 
 	return btn
 end
 
-local cauLabel = makeLabel(50, "CAU Coins: 0")
-local addLabel = makeLabel(80, "ADD Points: 0")
-local gpaLabel = makeLabel(110, "GPA Score: 0")
-local cauRuneLabel = makeLabel(150, "CAU Runes: 0 (x1)")
-local addRuneLabel = makeLabel(180, "ADD Runes: 0 (x1)")
-local gpaRuneLabel = makeLabel(210, "GPA Runes: 0 (x1)")
+local function spacer(order, size)
+	local sp = Instance.new("Frame")
+	sp.Size = UDim2.new(1, 0, 0, size or 10)
+	sp.BackgroundTransparency = 1
+	sp.LayoutOrder = order
+	sp.Parent = frame
+end
 
-local cauBtn = makeButton("Buy CAU Rune (10)", 255)
-local addBtn = makeButton("Buy ADD Rune (100)", 300)
-local gpaBtn = makeButton("Buy GPA Rune (100 ADD)", 345)
+-- UI ELEMENTS
+local title = makeLabel("Farm Panel", 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
 
+local cauLabel = makeLabel("CAU Coins: 0", 2)
+local addLabel = makeLabel("ADD Points: 0", 3)
+local gpaLabel = makeLabel("GPA Score: 0", 4)
+
+spacer(5, 8)
+
+local cauRuneLabel = makeLabel("CAU Runes: 0 (x1)", 6)
+local addRuneLabel = makeLabel("ADD Runes: 0 (x1)", 7)
+local gpaRuneLabel = makeLabel("GPA Runes: 0 (x1)", 8)
+
+spacer(9, 12)
+
+local cauBtn = makeButton("Buy CAU Rune (10)", 10)
+local addBtn = makeButton("Buy ADD Rune (100)", 11)
+local gpaBtn = makeButton("Buy GPA Rune (100 ADD)", 12)
+
+-- TOGGLE BUTTON
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 48, 0, 120)
 toggleBtn.AnchorPoint = Vector2.new(1, 0.5)
@@ -124,9 +143,7 @@ toggleBtn.TextSize = 16
 toggleBtn.AutoButtonColor = false
 toggleBtn.Parent = gui
 
-local tCorner = Instance.new("UICorner")
-tCorner.CornerRadius = UDim.new(0, 14)
-tCorner.Parent = toggleBtn
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 14)
 
 local tStroke = Instance.new("UIStroke")
 tStroke.Thickness = 1
@@ -134,17 +151,18 @@ tStroke.Color = Color3.fromRGB(120, 120, 145)
 tStroke.Transparency = 0.4
 tStroke.Parent = toggleBtn
 
+-- ANIMATION
 local function openUI()
 	frame.Visible = true
 	frame.Position = UDim2.new(0.5, -160, 0.5, 20)
-	TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.5, -160, 0.5, -195)
+	TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {
+		Position = UDim2.new(0.5, -160, 0.5, -210)
 	}):Play()
 	toggleBtn.Text = "Close"
 end
 
 local function closeUI()
-	local tween = TweenService:Create(frame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+	local tween = TweenService:Create(frame, TweenInfo.new(0.18), {
 		Position = UDim2.new(0.5, -160, 0.5, 20)
 	})
 	tween:Play()
@@ -162,6 +180,7 @@ toggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+-- BUTTON ACTIONS
 cauBtn.MouseButton1Click:Connect(function()
 	remoteEvent:FireServer("BuyRune", "CAU_RUNE")
 end)
@@ -174,10 +193,11 @@ gpaBtn.MouseButton1Click:Connect(function()
 	remoteEvent:FireServer("BuyRune", "GPA_RUNE")
 end)
 
+-- UPDATE UI
 local function updateUI(data)
-	cauLabel.Text = "CAU Coins: " .. tostring(math.floor(data.coins or 0))
-	addLabel.Text = "ADD Points: " .. tostring(math.floor(data.add or 0))
-	gpaLabel.Text = "GPA Score: " .. tostring(math.floor(data.gpa or 0))
+	cauLabel.Text = "CAU Coins: " .. math.floor(data.coins or 0)
+	addLabel.Text = "ADD Points: " .. math.floor(data.add or 0)
+	gpaLabel.Text = "GPA Score: " .. math.floor(data.gpa or 0)
 
 	local cauMult = 2^(data.cauRunes or 0)
 	local addMult = 2^(data.addRunes or 0)
@@ -194,6 +214,7 @@ end
 
 remoteEvent.OnClientEvent:Connect(updateUI)
 
+-- INIT
 updateUI({
 	coins = 0, add = 0, gpa = 0,
 	cauRunes = 0, addRunes = 0, gpaRunes = 0,
