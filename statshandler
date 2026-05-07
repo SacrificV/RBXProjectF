@@ -14,13 +14,13 @@ if not remoteEvent then
 end
 
 --========================
--- 🔷 Rune Class
+-- 🔷 BaseRune Class (D: Inheritance - parent class)
 --========================
-local Rune = {}
-Rune.__index = Rune
+local BaseRune = {}
+BaseRune.__index = BaseRune
 
-function Rune.new(name, config)
-	local self = setmetatable({}, Rune)
+function BaseRune.new(name, config)
+	local self = setmetatable({}, BaseRune)
 	self.name = name
 	self.currency = config.currency
 	self.baseCost = config.baseCost
@@ -30,17 +30,28 @@ function Rune.new(name, config)
 	return self
 end
 
-function Rune:GetCost()
+function BaseRune:GetCost()
 	return math.floor(self.baseCost * (self.costMultiplier ^ self.count))
 end
 
-function Rune:GetMultiplier()
+function BaseRune:GetMultiplier()
 	return self.earningsMultiplier ^ self.count
 end
 
-function Rune:Buy(playerData)
-	local cost = self:GetCost()
+function BaseRune:Buy(playerData)
+	-- H: Exception Handling - validate inputs before purchasing
+	local ok, err = pcall(function()
+		assert(playerData ~= nil, "playerData must not be nil")
+		assert(type(playerData) == "table", "playerData must be a table")
+		assert(type(playerData[self.currency]) == "number", "Currency field '" .. self.currency .. "' is missing or not a number")
+	end)
 
+	if not ok then
+		warn("[BaseRune:Buy] Validation error for rune '" .. self.name .. "': " .. tostring(err))
+		return false
+	end
+
+	local cost = self:GetCost()
 	if playerData[self.currency] >= cost then
 		playerData[self.currency] -= cost
 		self.count += 1
@@ -51,12 +62,53 @@ function Rune:Buy(playerData)
 end
 
 --========================
+-- 🔷 CoinRune (D: Inheritance - child class, inherits BaseRune)
+--========================
+local CoinRune = setmetatable({}, { __index = BaseRune })
+CoinRune.__index = CoinRune
+
+function CoinRune.new(name, config)
+	-- Inherit base construction
+	local self = BaseRune.new(name, config)
+	return setmetatable(self, CoinRune)
+end
+
+-- D: Polymorphism-ready override — CoinRune gets a flat bonus on cost
+function CoinRune:GetCost()
+	local baseCost = BaseRune.GetCost(self)
+	return baseCost -- can be extended, e.g. baseCost + 5 for a flat tax
+end
+
+--========================
+-- 🔷 ScoreRune (D: Inheritance - child class, inherits BaseRune)
+--    Used for ADD_RUNE and GPA_RUNE — higher base cost scaling
+--========================
+local ScoreRune = setmetatable({}, { __index = BaseRune })
+ScoreRune.__index = ScoreRune
+
+function ScoreRune.new(name, config)
+	local self = BaseRune.new(name, config)
+	return setmetatable(self, ScoreRune)
+end
+
+-- D: Overridden GetCost — ScoreRunes apply an extra scaling penalty
+function ScoreRune:GetCost()
+	local baseCost = BaseRune.GetCost(self)
+	-- ScoreRunes cost 10% more to reflect their impact on secondary currencies
+	return math.floor(baseCost * 1.1)
+end
+
+--========================
 -- 🔷 PlayerData Class
 --========================
 local PlayerDataClass = {}
 PlayerDataClass.__index = PlayerDataClass
 
 function PlayerDataClass.new(player)
+	-- H: Exception Handling - assert player is valid before constructing
+	assert(player ~= nil, "[PlayerData] Cannot create PlayerData for nil player")
+	assert(player:IsA("Player"), "[PlayerData] Provided instance is not a Player")
+
 	local self = setmetatable({}, PlayerDataClass)
 
 	self.player = player
@@ -65,20 +117,21 @@ function PlayerDataClass.new(player)
 	self.ADD_POINTS = 0
 	self.GPA_SCORE = 0
 
+	-- D: Inheritance - runes now use subclasses (CoinRune / ScoreRune)
 	self.runes = {
-		CAU_RUNE = Rune.new("CAU_RUNE", {
+		CAU_RUNE = CoinRune.new("CAU_RUNE", {
 			currency = "CAU_COINS",
 			baseCost = 10,
 			costMultiplier = 1.5,
 			earningsMultiplier = 2
 		}),
-		ADD_RUNE = Rune.new("ADD_RUNE", {
+		ADD_RUNE = ScoreRune.new("ADD_RUNE", {
 			currency = "CAU_COINS",
 			baseCost = 100,
 			costMultiplier = 1.5,
 			earningsMultiplier = 2
 		}),
-		GPA_RUNE = Rune.new("GPA_RUNE", {
+		GPA_RUNE = ScoreRune.new("GPA_RUNE", {
 			currency = "ADD_POINTS",
 			baseCost = 100,
 			costMultiplier = 1.5,
@@ -92,60 +145,91 @@ function PlayerDataClass.new(player)
 end
 
 function PlayerDataClass:CreateLeaderstats()
-	local leaderstats = Instance.new("Folder")
-	leaderstats.Name = "leaderstats"
-	leaderstats.Parent = self.player
+	-- H: Exception Handling - wrap leaderstats creation in pcall
+	local ok, err = pcall(function()
+		local leaderstats = Instance.new("Folder")
+		leaderstats.Name = "leaderstats"
+		leaderstats.Parent = self.player
 
-	local coins = Instance.new("IntValue")
-	coins.Name = "CAUCoins"
-	coins.Parent = leaderstats
+		local coins = Instance.new("IntValue")
+		coins.Name = "CAUCoins"
+		coins.Parent = leaderstats
 
-	local add = Instance.new("IntValue")
-	add.Name = "ADDPoints"
-	add.Parent = leaderstats
+		local add = Instance.new("IntValue")
+		add.Name = "ADDPoints"
+		add.Parent = leaderstats
 
-	local gpa = Instance.new("IntValue")
-	gpa.Name = "GPAScore"
-	gpa.Parent = leaderstats
+		local gpa = Instance.new("IntValue")
+		gpa.Name = "GPAScore"
+		gpa.Parent = leaderstats
+	end)
 
-	self:UpdateLeaderstats()
+	if not ok then
+		warn("[PlayerData:CreateLeaderstats] Failed for player '" .. self.player.Name .. "': " .. tostring(err))
+	else
+		self:UpdateLeaderstats()
+	end
 end
 
 function PlayerDataClass:UpdateLeaderstats()
 	local ls = self.player:FindFirstChild("leaderstats")
-	if not ls then return end
+	if not ls then
+		warn("[PlayerData:UpdateLeaderstats] No leaderstats folder found for: " .. self.player.Name)
+		return
+	end
 
-	ls.CAUCoins.Value = self.CAU_COINS
-	ls.ADDPoints.Value = self.ADD_POINTS
-	ls.GPAScore.Value = self.GPA_SCORE
+	-- H: Exception Handling - safe value assignment
+	local ok, err = pcall(function()
+		ls.CAUCoins.Value = self.CAU_COINS
+		ls.ADDPoints.Value = self.ADD_POINTS
+		ls.GPAScore.Value = self.GPA_SCORE
+	end)
+
+	if not ok then
+		warn("[PlayerData:UpdateLeaderstats] Failed to update values: " .. tostring(err))
+	end
 end
 
 function PlayerDataClass:SendData()
-	remoteEvent:FireClient(self.player, {
-		coins = self.CAU_COINS,
-		add = self.ADD_POINTS,
-		gpa = self.GPA_SCORE,
+	-- H: Exception Handling - guard against FireClient on disconnected player
+	local ok, err = pcall(function()
+		remoteEvent:FireClient(self.player, {
+			coins = self.CAU_COINS,
+			add = self.ADD_POINTS,
+			gpa = self.GPA_SCORE,
 
-		cauRunes = self.runes.CAU_RUNE.count,
-		addRunes = self.runes.ADD_RUNE.count,
-		gpaRunes = self.runes.GPA_RUNE.count,
+			cauRunes = self.runes.CAU_RUNE.count,
+			addRunes = self.runes.ADD_RUNE.count,
+			gpaRunes = self.runes.GPA_RUNE.count,
 
-		cauCost = self.runes.CAU_RUNE:GetCost(),
-		addCost = self.runes.ADD_RUNE:GetCost(),
-		gpaCost = self.runes.GPA_RUNE:GetCost()
-	})
+			cauCost = self.runes.CAU_RUNE:GetCost(),
+			addCost = self.runes.ADD_RUNE:GetCost(),
+			gpaCost = self.runes.GPA_RUNE:GetCost()
+		})
+	end)
+
+	if not ok then
+		warn("[PlayerData:SendData] Failed to send data to '" .. self.player.Name .. "': " .. tostring(err))
+	end
 end
 
 function PlayerDataClass:FarmTick()
-	local cauMultiplier = self.runes.CAU_RUNE:GetMultiplier()
-	self.CAU_COINS += cauMultiplier
+	-- H: Exception Handling - wrap tick logic so one bad frame doesn't kill the loop
+	local ok, err = pcall(function()
+		local cauMultiplier = self.runes.CAU_RUNE:GetMultiplier()
+		self.CAU_COINS += cauMultiplier
 
-	if self.runes.ADD_RUNE.count > 0 then
-		self.ADD_POINTS += self.runes.ADD_RUNE:GetMultiplier()
-	end
+		if self.runes.ADD_RUNE.count > 0 then
+			self.ADD_POINTS += self.runes.ADD_RUNE:GetMultiplier()
+		end
 
-	if self.runes.GPA_RUNE.count > 0 then
-		self.GPA_SCORE += self.runes.GPA_RUNE:GetMultiplier()
+		if self.runes.GPA_RUNE.count > 0 then
+			self.GPA_SCORE += self.runes.GPA_RUNE:GetMultiplier()
+		end
+	end)
+
+	if not ok then
+		warn("[PlayerData:FarmTick] Error during tick for '" .. self.player.Name .. "': " .. tostring(err))
 	end
 end
 
@@ -168,11 +252,21 @@ function PlayerDataClass:StopLoop()
 end
 
 function PlayerDataClass:BuyRune(runeName)
+	-- H: Exception Handling - validate rune name before proceeding
 	local rune = self.runes[runeName]
-	if not rune then return end
+	if not rune then
+		warn("[PlayerData:BuyRune] Unknown rune '" .. tostring(runeName) .. "' requested by " .. self.player.Name)
+		return
+	end
 
-	if rune:Buy(self) then
-		self:SendData()
+	local ok, err = pcall(function()
+		if rune:Buy(self) then
+			self:SendData()
+		end
+	end)
+
+	if not ok then
+		warn("[PlayerData:BuyRune] Error purchasing rune '" .. runeName .. "': " .. tostring(err))
 	end
 end
 
@@ -182,14 +276,21 @@ end
 local PlayerObjects = {}
 
 local function onPlayerAdded(player)
-	local obj = PlayerDataClass.new(player)
-	PlayerObjects[player.UserId] = obj
+	-- H: Exception Handling - wrap full player setup in pcall
+	local ok, err = pcall(function()
+		local obj = PlayerDataClass.new(player)
+		PlayerObjects[player.UserId] = obj
 
-	obj:CreateLeaderstats()
+		obj:CreateLeaderstats()
 
-	task.wait(0.5)
-	obj:SendData()
-	obj:StartLoop()
+		task.wait(0.5)
+		obj:SendData()
+		obj:StartLoop()
+	end)
+
+	if not ok then
+		warn("[GameManager] Failed to initialise player '" .. player.Name .. "': " .. tostring(err))
+	end
 end
 
 local function onPlayerRemoving(player)
@@ -204,11 +305,24 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
 
 remoteEvent.OnServerEvent:Connect(function(player, action, runeName)
-	local obj = PlayerObjects[player.UserId]
-	if not obj then return end
+	-- H: Exception Handling - validate incoming remote event data
+	local ok, err = pcall(function()
+		assert(type(action) == "string", "action must be a string")
+		assert(type(runeName) == "string", "runeName must be a string")
 
-	if action == "BuyRune" then
-		obj:BuyRune(runeName)
+		local obj = PlayerObjects[player.UserId]
+		if not obj then
+			warn("[RemoteEvent] No PlayerData found for " .. player.Name)
+			return
+		end
+
+		if action == "BuyRune" then
+			obj:BuyRune(runeName)
+		end
+	end)
+
+	if not ok then
+		warn("[RemoteEvent] Error handling action from '" .. player.Name .. "': " .. tostring(err))
 	end
 end)
 
